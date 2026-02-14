@@ -1,5 +1,5 @@
 /**
- * Organ Ground Transport Bridge Server
+ * OrganTrail Bridge Server
  *
  * - Reads temperature, shock, humidity, GPS from serial port (COM port)
  * - Broadcasts to all connected dashboard clients via WebSocket
@@ -65,6 +65,38 @@ app.post('/api/readings', (req, res) => {
   }
   broadcast(payload);
   res.json({ ok: true });
+});
+
+// GET /api/directions — proxy to Google Directions API (avoids CORS)
+const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+app.get('/api/directions', async (req, res) => {
+  if (!GOOGLE_API_KEY) {
+    return res.status(503).json({ error: 'GOOGLE_MAPS_API_KEY not set in server/.env' });
+  }
+  const { origin, destination } = req.query;
+  if (!origin || !destination) {
+    return res.status(400).json({ error: 'Expected origin and destination query params' });
+  }
+  try {
+    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=driving&key=${GOOGLE_API_KEY}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.status !== 'OK') {
+      return res.status(400).json({ error: data.error_message || data.status });
+    }
+    const route = data.routes?.[0];
+    if (!route) {
+      return res.status(404).json({ error: 'No route found' });
+    }
+    const leg = route.legs?.[0];
+    res.json({
+      polyline: route.overview_polyline?.points,
+      distance: leg?.distance?.text,
+      duration: leg?.duration?.text,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/ports — list available serial ports

@@ -47,6 +47,7 @@ function App() {
   const { primaryDevice, recentShocks, alerts, isConnected, lastReadingAt, location, path } = useLiveReadings();
   const [, setTick] = useState(0);
   const [destination, setDestination] = useState(DEFAULT_DESTINATION);
+  const [redirectedTo, setRedirectedTo] = useState(null);
   const [routeModalOpen, setRouteModalOpen] = useState(false);
   const [selectedTransportId, setSelectedTransportId] = useState(null);
   const [redirectDismissedUntil, setRedirectDismissedUntil] = useState(0);
@@ -101,6 +102,7 @@ function App() {
 
   const handleConfirmRedirect = (hospital) => {
     setDestination({ name: hospital.name, lat: hospital.lat, lng: hospital.lng });
+    setRedirectedTo(hospital);
     setRedirectDismissedUntil(Date.now() + 60000); // Don't show again for 1 minute
   };
 
@@ -112,10 +114,13 @@ function App() {
     <div className="dashboard">
       <header className="dashboard-header">
         <div className="header-content">
-          <h1 className="dashboard-title">Organ Ground Transport Monitoring</h1>
-          <p className="dashboard-subtitle">
-            On-ground transport logistics — temperature, shock, humidity & GPS tracking
-          </p>
+          <img src="/logo.png" alt="OrganTrail" className="header-logo" />
+          <div>
+            <h1 className="dashboard-title">OrganTrail</h1>
+            <p className="dashboard-subtitle">
+              On-ground transport logistics — temperature, shock, humidity & GPS tracking
+            </p>
+          </div>
         </div>
         <div className="header-meta">
           <span className={`live-dot ${isConnected ? 'live-dot-active' : ''}`} />
@@ -123,6 +128,20 @@ function App() {
           <span className="header-time">{formatDate(new Date().toISOString())}</span>
         </div>
       </header>
+
+      {redirectedTo && (
+        <div className="redirect-banner">
+          <span className="redirect-banner-icon">↪</span>
+          <strong>Redirected</strong>
+          <span> — Transport now heading to </span>
+          <strong>{redirectedTo.name}</strong>
+          {(redirectedTo.city || redirectedTo.state) && (
+            <span className="redirect-banner-location">
+              {' '}({[redirectedTo.city, redirectedTo.state].filter(Boolean).join(', ')})
+            </span>
+          )}
+        </div>
+      )}
 
       <main className="dashboard-main">
         <section className="stats-row">
@@ -270,7 +289,12 @@ function App() {
                     <td><code>{t.id}</code></td>
                     <td>{t.organType}</td>
                     <td><code>{t.deviceId}</code></td>
-                    <td>{t.destination?.name ?? t.destination}</td>
+                    <td>
+                      {t.destination?.name ?? t.destination}
+                      {t.isLive && redirectedTo && (
+                        <span className="badge badge-redirected">Redirected</span>
+                      )}
+                    </td>
                     <td>
                       <span className="temp-cell">
                         {t.temperature != null ? `${t.temperature}°C` : '—'}

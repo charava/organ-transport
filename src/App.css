@@ -20,6 +20,15 @@
 .header-content {
   flex: 1;
   min-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.header-logo {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
 }
 
 .dashboard-title {
@@ -56,6 +65,34 @@
   background: #3fb950;
   box-shadow: 0 0 8px #3fb950;
   animation: pulse 2s ease-in-out infinite;
+}
+
+/* Redirect banner */
+.redirect-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 2rem;
+  background: rgba(240, 136, 62, 0.15);
+  border-bottom: 1px solid rgba(240, 136, 62, 0.4);
+  font-size: 0.9rem;
+  color: var(--text-primary, #e6edf3);
+}
+
+.redirect-banner-icon {
+  font-size: 1.2rem;
+  color: #f0883e;
+}
+
+.redirect-banner-location {
+  color: var(--text-muted, #8b949e);
+  font-weight: normal;
+}
+
+.badge-redirected {
+  margin-left: 0.5rem;
+  background: rgba(240, 136, 62, 0.25);
+  color: #f0883e;
 }
 
 @keyframes pulse {

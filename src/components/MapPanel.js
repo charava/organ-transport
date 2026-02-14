@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
+
 // Fix default marker icon in webpack
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -15,6 +16,8 @@ function MapUpdater({ location }) {
   const map = useMap();
   const hasLocated = useRef(false);
 
+
+  
   useEffect(() => {
     if (!location) return;
     if (!hasLocated.current) {

@@ -1,8 +1,8 @@
-# Organ Ground Transport Monitoring
+# OrganTrail
 
 On-ground organ transport logistics — multi-factor error detection (temperature, shock, humidity) and GPS tracking for road-based transplant transport.
 
-This system is designed for ground vehicles (ambulances, transport vans) moving organs between facilities. Since ground transport is a part of the transport process that is susceptible to causing organ damage, we want to build software that monitors transport, collects data for future transport optimization, and 
+This system is designed for ground vehicles (ambulances, transport vans) moving organs between facilities. 
 
 Treehacks 2026 - Ananya, Ashley, Charlotte, Leah
 
@@ -83,7 +83,17 @@ Shock: 0 | Temp: 21.50C | Humidity: 45.40% | Lat: 37.7749 | Lng: -122.4194
 - `lat`, `lng` — GPS coordinates (optional)
 - `deviceId` — optional
 
-### 5. Hospitals data (for redirect suggestions)
+### 5. Google Maps API (for route directions)
+
+Add your Google Maps API key to `server/.env`:
+
+```
+GOOGLE_MAPS_API_KEY=your_api_key_here
+```
+
+Enable the **Directions API** in [Google Cloud Console](https://console.cloud.google.com/apis/library/directions-backend.googleapis.com). The View route modal will then show driving routes from Google Maps.
+
+### 6. Hospitals data (for redirect suggestions)
 
 Process `hospitals.csv` into JSON for the dashboard:
 
@@ -93,7 +103,7 @@ npm run process-hospitals
 
 This creates `public/hospitals.json`. The redirect triage uses it to suggest nearest hospitals by location.
 
-### 6. Test without hardware
+### 7. Test without hardware
 
 With the bridge running:
 

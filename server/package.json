@@ -1,7 +1,7 @@
 {
   "name": "organ-bridge",
   "version": "1.0.0",
-  "description": "Bridge server: serial port + WebSocket for organ transport monitoring",
+  "description": "OrganTrail bridge server: serial port + WebSocket for organ transport monitoring",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
