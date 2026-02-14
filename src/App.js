@@ -1,10 +1,9 @@
 import './App.css';
 import {
   activeTransports,
-  alerts,
-  currentReadings,
   TEMP_SAFE_RANGE,
 } from './data/mockTransportData';
+import { useLiveReadings } from './hooks/useLiveReadings';
 
 function formatTime(iso) {
   return new Date(iso).toLocaleTimeString('en-US', {
@@ -36,7 +35,7 @@ function StatusBadge({ status }) {
 }
 
 function App() {
-  const { primaryDevice, recentShocks } = currentReadings;
+  const { primaryDevice, recentShocks, alerts, isConnected } = useLiveReadings();
   const criticalCount = alerts.filter((a) => a.severity === 'critical').length;
   const warningCount = alerts.filter((a) => a.severity === 'warning').length;
 
@@ -50,7 +49,8 @@ function App() {
           </p>
         </div>
         <div className="header-meta">
-          <span className="live-dot" /> Live
+          <span className={`live-dot ${isConnected ? 'live-dot-active' : ''}`} />
+          {isConnected ? 'Live' : 'Disconnected'}
           <span className="header-time">{formatDate(new Date().toISOString())}</span>
         </div>
       </header>

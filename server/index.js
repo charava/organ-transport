@@ -71,7 +71,7 @@ if (SERIAL_PATH) {
       baudRate: SERIAL_BAUD,
     });
 
-    const parser = serialPort.pipe(new ReadlineParser({ delimiter: '\r\n' }));
+    const parser = serialPort.pipe(new ReadlineParser({ delimiter: '\n' }));
 
     parser.on('data', (line) => {
       const trimmed = line.trim();

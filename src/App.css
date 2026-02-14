@@ -48,6 +48,11 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
+  background: #6e7681;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.live-dot-active {
   background: #3fb950;
   box-shadow: 0 0 8px #3fb950;
   animation: pulse 2s ease-in-out infinite;
