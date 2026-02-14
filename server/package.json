@@ -1,0 +1,15 @@
+{
+  "name": "organ-bridge",
+  "version": "1.0.0",
+  "description": "Bridge server: serial port + WebSocket for organ transport monitoring",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "mock": "node mock-sender.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "serialport": "^12.0.0",
+    "ws": "^8.14.2"
+  }
+}
