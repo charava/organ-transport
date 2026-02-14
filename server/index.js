@@ -6,10 +6,11 @@
  * - Also accepts POST /api/readings for testing without hardware
  *
  * Usage:
- *   SERIAL_PORT=COM3 node index.js     (Windows)
- *   SERIAL_PORT=/dev/cu.usbserial-1420 node index.js  (macOS)
- *   node index.js                       (no serial, use POST for testing)
+ *   Set SERIAL_PORT in server/.env (e.g. /dev/cu.usbserial-10 on macOS)
+ *   Or: SERIAL_PORT=COM3 node index.js (Windows)
  */
+
+require('dotenv').config();
 
 const express = require('express');
 const { WebSocketServer } = require('ws');
@@ -28,11 +29,21 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 function broadcast(data) {
-  const msg = JSON.stringify(data);
+  const payload = {
+    ...data,
+    at: data.at || new Date().toISOString(),
+    receivedAt: new Date().toISOString(),
+  };
+  const msg = JSON.stringify(payload);
   wss.clients.forEach((client) => {
     if (client.readyState === 1) client.send(msg);
   });
-  console.log('[broadcast]', data);
+  const ts = payload.receivedAt ? new Date(payload.receivedAt).toLocaleTimeString() : '';
+  const parts = [];
+  if (payload.temp != null) parts.push(`${payload.temp}°C`);
+  if (payload.humidity != null) parts.push(`${payload.humidity}%`);
+  parts.push(`shock=${payload.shock}g`);
+  console.log('[broadcast]', parts.join(', ') + (ts ? ` @ ${ts}` : ''));
 }
 
 // POST /api/readings — for testing without hardware (curl, mock script)
@@ -41,13 +52,11 @@ app.post('/api/readings', (req, res) => {
   if (!reading || typeof reading.temp === 'undefined') {
     return res.status(400).json({ error: 'Expected { temp, shock?, deviceId? }' });
   }
-  const payload = {
+  broadcast({
     temp: Number(reading.temp),
     shock: Number(reading.shock ?? 0),
     deviceId: reading.deviceId || 'DEV-001',
-    at: new Date().toISOString(),
-  };
-  broadcast(payload);
+  });
   res.json({ ok: true });
 });
 
@@ -62,7 +71,9 @@ app.get('/api/ports', async (req, res) => {
 });
 
 // Serial port connection
-let serialPort = null;
+let serialPort = null; // /dev/cu.usbserial-XXXX
+
+
 
 if (SERIAL_PATH) {
   try {
@@ -73,20 +84,39 @@ if (SERIAL_PATH) {
 
     const parser = serialPort.pipe(new ReadlineParser({ delimiter: '\n' }));
 
+    function parseLine(trimmed) {
+      // Try JSON first
+      try {
+        const r = JSON.parse(trimmed);
+        return {
+          temp: Number(r.temp ?? r.temperature ?? 0),
+          shock: Number(r.shock ?? r.gForce ?? 0),
+          humidity: r.humidity != null ? Number(r.humidity) : undefined,
+          deviceId: r.deviceId || 'DEV-001',
+        };
+      } catch (_) {}
+
+      // Parse text format: "Shock: 0 | Temp: 21.50C | Humidity: 45.40%"
+      const match = trimmed.match(/Shock:\s*([\d.]+)\s*\|?\s*Temp:\s*([\d.]+)C?\s*\|?\s*Humidity:\s*([\d.]+)%?/i);
+      if (match) {
+        return {
+          temp: Number(match[2]),
+          shock: Number(match[1]),
+          humidity: Number(match[3]),
+          deviceId: 'DEV-001',
+        };
+      }
+      return null;
+    }
+
     parser.on('data', (line) => {
       const trimmed = line.trim();
       if (!trimmed) return;
-      try {
-        const reading = JSON.parse(trimmed);
-        const payload = {
-          temp: Number(reading.temp ?? reading.temperature ?? 0),
-          shock: Number(reading.shock ?? reading.gForce ?? 0),
-          deviceId: reading.deviceId || 'DEV-001',
-          at: new Date().toISOString(),
-        };
-        broadcast(payload);
-      } catch (err) {
-        console.warn('[serial] Invalid JSON:', trimmed);
+      const reading = parseLine(trimmed);
+      if (reading) {
+        broadcast(reading);
+      } else {
+        console.warn('[serial] Unrecognized format:', trimmed);
       }
     });
 

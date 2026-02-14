@@ -1,9 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  currentReadings as mockReadings,
-  alerts as mockAlerts,
-  TEMP_SAFE_RANGE,
-} from '../data/mockTransportData';
+import { TEMP_SAFE_RANGE } from '../data/mockTransportData';
 
 const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:4000';
 const SHOCK_WARNING_THRESHOLD = 1.5; // g-force above this = warning
@@ -11,20 +7,25 @@ const SHOCK_ALERT_THRESHOLD = 2.5;   // g-force above this = critical
 const MAX_RECENT_SHOCKS = 20;
 const MAX_ALERTS = 50;
 
+const emptyDevice = { deviceId: null, temperature: null, humidity: null, lastShock: null };
+
 export function useLiveReadings() {
   const [isConnected, setIsConnected] = useState(false);
-  const [primaryDevice, setPrimaryDevice] = useState(mockReadings.primaryDevice);
-  const [recentShocks, setRecentShocks] = useState(mockReadings.recentShocks);
-  const [alerts, setAlerts] = useState(mockAlerts);
+  const [primaryDevice, setPrimaryDevice] = useState(emptyDevice);
+  const [recentShocks, setRecentShocks] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [lastReadingAt, setLastReadingAt] = useState(null);
 
   const processReading = useCallback((payload) => {
-    const { temp, shock, deviceId, at } = payload;
-    const now = at || new Date().toISOString();
+    const { temp, shock, humidity, deviceId, at, receivedAt } = payload;
+    const now = receivedAt || at || new Date().toISOString();
+    setLastReadingAt(now);
 
     setPrimaryDevice((prev) => ({
       ...prev,
       deviceId: deviceId || prev.deviceId,
       temperature: typeof temp === 'number' ? temp : prev.temperature,
+      humidity: typeof humidity === 'number' ? humidity : prev.humidity,
       lastShock: shock > 0 ? { g: shock, at: now } : prev.lastShock,
     }));
 
@@ -65,9 +66,15 @@ export function useLiveReadings() {
 
   useEffect(() => {
     if (!isConnected) {
-      setPrimaryDevice(mockReadings.primaryDevice);
-      setRecentShocks(mockReadings.recentShocks);
-      setAlerts(mockAlerts);
+      setPrimaryDevice({
+        deviceId: null,
+        temperature: null,
+        humidity: null,
+        lastShock: null,
+      });
+      setRecentShocks([]);
+      setAlerts([]);
+      setLastReadingAt(null);
     }
   }, [isConnected]);
 
@@ -110,5 +117,6 @@ export function useLiveReadings() {
     recentShocks,
     alerts,
     isConnected,
+    lastReadingAt,
   };
 }
