@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -38,7 +38,7 @@ function RouteMapUpdater({ location, destination, path, routePath }) {
   return null;
 }
 
-export function RouteModal({ isOpen, onClose, location, path, destination, transportLabel }) {
+function RouteModalInner({ isOpen, onClose, location, path, destination, transportLabel }) {
   const defaultCenter = [37.7749, -122.4194];
   const pathPositions = path.map((p) => [p.lat, p.lng]);
   const [routePath, setRoutePath] = useState([]);
@@ -132,3 +132,5 @@ export function RouteModal({ isOpen, onClose, location, path, destination, trans
     </div>
   );
 }
+
+export const RouteModal = memo(RouteModalInner);

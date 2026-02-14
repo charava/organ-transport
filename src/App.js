@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import './App.css';
 import { TEMP_SAFE_RANGE, activeTransports } from './data/mockTransportData';
 import { DEFAULT_DESTINATION } from './data/transportConfig';
@@ -50,6 +50,7 @@ function App() {
   const [redirectedTo, setRedirectedTo] = useState(null);
   const [routeModalOpen, setRouteModalOpen] = useState(false);
   const [selectedTransportId, setSelectedTransportId] = useState(null);
+  const [routeSnapshot, setRouteSnapshot] = useState(null);
   const [redirectDismissedUntil, setRedirectDismissedUntil] = useState(0);
 
   useEffect(() => {
@@ -99,6 +100,12 @@ function App() {
       lastReadingAt: null,
     };
   });
+
+  const handleCloseRouteModal = useCallback(() => {
+    setRouteModalOpen(false);
+    setSelectedTransportId(null);
+    setRouteSnapshot(null);
+  }, []);
 
   const handleConfirmRedirect = (hospital) => {
     setDestination({ name: hospital.name, lat: hospital.lat, lng: hospital.lng });
@@ -323,7 +330,14 @@ function App() {
                       <button
                         className="btn-view-route"
                         onClick={() => {
+                          const transport = transportsWithLive.find((x) => x.id === t.id);
                           setSelectedTransportId(t.id);
+                          setRouteSnapshot({
+                            location: transport?.isLive ? (location || transport?.location) : transport?.location,
+                            path: transport?.isLive ? [...(path || [])] : [],
+                            destination: transport?.destination ?? destination,
+                            transportLabel: `${transport?.organType} → ${transport?.destination?.name ?? transport?.destination ?? ''}`,
+                          });
                           setRouteModalOpen(true);
                         }}
                         title="View route and path"
@@ -358,21 +372,11 @@ function App() {
 
       <RouteModal
         isOpen={routeModalOpen}
-        onClose={() => { setRouteModalOpen(false); setSelectedTransportId(null); }}
-        location={selectedTransportId && transportsWithLive.find((x) => x.id === selectedTransportId)?.isLive
-          ? location
-          : selectedTransportId
-            ? transportsWithLive.find((x) => x.id === selectedTransportId)?.location ?? null
-            : null}
-        path={selectedTransportId && transportsWithLive.find((x) => x.id === selectedTransportId)?.isLive
-          ? path
-          : []}
-        destination={selectedTransportId
-          ? (transportsWithLive.find((x) => x.id === selectedTransportId)?.destination ?? destination)
-          : destination}
-        transportLabel={selectedTransportId
-          ? transportsWithLive.find((x) => x.id === selectedTransportId)?.organType + ' → ' + (transportsWithLive.find((x) => x.id === selectedTransportId)?.destination?.name ?? '')
-          : null}
+        onClose={handleCloseRouteModal}
+        location={routeSnapshot?.location}
+        path={routeSnapshot?.path ?? []}
+        destination={routeSnapshot?.destination}
+        transportLabel={routeSnapshot?.transportLabel}
       />
 
       <RedirectTriage
