@@ -1,7 +1,7 @@
 /**
- * Organ Transport Bridge Server
+ * Organ Ground Transport Bridge Server
  *
- * - Reads temperature + shock data from serial port (COM port)
+ * - Reads temperature, shock, humidity, GPS from serial port (COM port)
  * - Broadcasts to all connected dashboard clients via WebSocket
  * - Also accepts POST /api/readings for testing without hardware
  *
@@ -43,6 +43,7 @@ function broadcast(data) {
   if (payload.temp != null) parts.push(`${payload.temp}°C`);
   if (payload.humidity != null) parts.push(`${payload.humidity}%`);
   parts.push(`shock=${payload.shock}g`);
+  if (payload.lat != null && payload.lng != null) parts.push(`GPS ${payload.lat.toFixed(4)}, ${payload.lng.toFixed(4)}`);
   console.log('[broadcast]', parts.join(', ') + (ts ? ` @ ${ts}` : ''));
 }
 
@@ -50,13 +51,19 @@ function broadcast(data) {
 app.post('/api/readings', (req, res) => {
   const reading = req.body;
   if (!reading || typeof reading.temp === 'undefined') {
-    return res.status(400).json({ error: 'Expected { temp, shock?, deviceId? }' });
+    return res.status(400).json({ error: 'Expected { temp, shock?, deviceId?, lat?, lng? }' });
   }
-  broadcast({
+  const payload = {
     temp: Number(reading.temp),
     shock: Number(reading.shock ?? 0),
+    humidity: reading.humidity != null ? Number(reading.humidity) : undefined,
     deviceId: reading.deviceId || 'DEV-001',
-  });
+  };
+  if (reading.lat != null && reading.lng != null) {
+    payload.lat = Number(reading.lat);
+    payload.lng = Number(reading.lng);
+  }
+  broadcast(payload);
   res.json({ ok: true });
 });
 
@@ -71,8 +78,7 @@ app.get('/api/ports', async (req, res) => {
 });
 
 // Serial port connection
-let serialPort = null; // /dev/cu.usbserial-XXXX
-
+let serialPort = null; 
 
 
 if (SERIAL_PATH) {
@@ -88,23 +94,33 @@ if (SERIAL_PATH) {
       // Try JSON first
       try {
         const r = JSON.parse(trimmed);
-        return {
+        const out = {
           temp: Number(r.temp ?? r.temperature ?? 0),
           shock: Number(r.shock ?? r.gForce ?? 0),
           humidity: r.humidity != null ? Number(r.humidity) : undefined,
           deviceId: r.deviceId || 'DEV-001',
         };
+        if (r.lat != null && r.lng != null) {
+          out.lat = Number(r.lat);
+          out.lng = Number(r.lng);
+        }
+        return out;
       } catch (_) {}
 
-      // Parse text format: "Shock: 0 | Temp: 21.50C | Humidity: 45.40%"
-      const match = trimmed.match(/Shock:\s*([\d.]+)\s*\|?\s*Temp:\s*([\d.]+)C?\s*\|?\s*Humidity:\s*([\d.]+)%?/i);
+      // Parse text format: "Shock: 0 | Temp: 21.50C | Humidity: 45.40%" or with GPS "| Lat: 37.77 | Lng: -122.42"
+      const match = trimmed.match(/Shock:\s*([\d.-]+)\s*\|?\s*Temp:\s*([\d.]+)C?\s*\|?\s*Humidity:\s*([\d.]+)%?(?:\s*\|?\s*Lat:\s*([\d.-]+)\s*\|?\s*Lng:\s*([\d.-]+))?/i);
       if (match) {
-        return {
+        const out = {
           temp: Number(match[2]),
           shock: Number(match[1]),
           humidity: Number(match[3]),
           deviceId: 'DEV-001',
         };
+        if (match[4] != null && match[5] != null) {
+          out.lat = Number(match[4]);
+          out.lng = Number(match[5]);
+        }
+        return out;
       }
       return null;
     }

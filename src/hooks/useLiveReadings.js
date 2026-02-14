@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { TEMP_SAFE_RANGE } from '../data/mockTransportData';
+import { TEMP_SAFE_RANGE, getSyntheticLocation } from '../data/mockTransportData';
 
 const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:4000';
 const SHOCK_WARNING_THRESHOLD = 1.5; // g-force above this = warning
 const SHOCK_ALERT_THRESHOLD = 2.5;   // g-force above this = critical
 const MAX_RECENT_SHOCKS = 20;
-const MAX_ALERTS = 50;
+const MAX_ALERTS = 50; // maybe we want to change this?!! to 100
 
 const emptyDevice = { deviceId: null, temperature: null, humidity: null, lastShock: null };
+const MAX_PATH_POINTS = 500;
 
 export function useLiveReadings() {
   const [isConnected, setIsConnected] = useState(false);
@@ -15,9 +16,11 @@ export function useLiveReadings() {
   const [recentShocks, setRecentShocks] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [lastReadingAt, setLastReadingAt] = useState(null);
+  const [location, setLocation] = useState(null);
+  const [path, setPath] = useState([]);
 
   const processReading = useCallback((payload) => {
-    const { temp, shock, humidity, deviceId, at, receivedAt } = payload;
+    const { temp, shock, humidity, lat, lng, deviceId, at, receivedAt } = payload;
     const now = receivedAt || at || new Date().toISOString();
     setLastReadingAt(now);
 
@@ -28,6 +31,27 @@ export function useLiveReadings() {
       humidity: typeof humidity === 'number' ? humidity : prev.humidity,
       lastShock: shock > 0 ? { g: shock, at: now } : prev.lastShock,
     }));
+
+    if (typeof lat === 'number' && typeof lng === 'number' && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      setLocation({ lat, lng, at: now });
+      setPath((prev) => {
+        const last = prev[prev.length - 1];
+        const same = last && Math.abs(last.lat - lat) < 0.0001 && Math.abs(last.lng - lng) < 0.0001;
+        if (same) return prev;
+        return [...prev, { lat, lng, at: now }].slice(-MAX_PATH_POINTS);
+      });
+    } else {
+      // Synthetic location when no GPS from device
+      const t = Date.now() / 10000;
+      const synth = getSyntheticLocation(deviceId || 'DEV-001', t);
+      setLocation({ ...synth, at: now });
+      setPath((prev) => {
+        const last = prev[prev.length - 1];
+        const same = last && Math.abs(last.lat - synth.lat) < 0.00005 && Math.abs(last.lng - synth.lng) < 0.00005;
+        if (same) return prev;
+        return [...prev, { ...synth, at: now }].slice(-MAX_PATH_POINTS);
+      });
+    }
 
     if (shock > 0) {
       const severity =
@@ -75,6 +99,8 @@ export function useLiveReadings() {
       setRecentShocks([]);
       setAlerts([]);
       setLastReadingAt(null);
+      setLocation(null);
+      setPath([]);
     }
   }, [isConnected]);
 
@@ -118,5 +144,7 @@ export function useLiveReadings() {
     alerts,
     isConnected,
     lastReadingAt,
+    location,
+    path,
   };
 }

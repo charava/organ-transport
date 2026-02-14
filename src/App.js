@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import './App.css';
-import { TEMP_SAFE_RANGE } from './data/mockTransportData';
+import { TEMP_SAFE_RANGE, activeTransports } from './data/mockTransportData';
+import { DEFAULT_DESTINATION } from './data/transportConfig';
 import { useLiveReadings } from './hooks/useLiveReadings';
+import { MapPanel } from './components/MapPanel';
+import { RouteModal } from './components/RouteModal';
+import { RedirectTriage } from './components/RedirectTriage';
 
 function formatTime(iso) {
   return new Date(iso).toLocaleTimeString('en-US', {
@@ -40,31 +44,77 @@ function formatRelativeTime(iso) {
 }
 
 function App() {
-  const { primaryDevice, recentShocks, alerts, isConnected, lastReadingAt } = useLiveReadings();
+  const { primaryDevice, recentShocks, alerts, isConnected, lastReadingAt, location, path } = useLiveReadings();
   const [, setTick] = useState(0);
+  const [destination, setDestination] = useState(DEFAULT_DESTINATION);
+  const [routeModalOpen, setRouteModalOpen] = useState(false);
+  const [selectedTransportId, setSelectedTransportId] = useState(null);
+  const [redirectDismissedUntil, setRedirectDismissedUntil] = useState(0);
+
   useEffect(() => {
     if (!lastReadingAt) return;
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, [lastReadingAt]);
+
+  const criticalAlert = alerts.find((a) => a.severity === 'critical');
+  const showRedirectTriage = criticalAlert && Date.now() > redirectDismissedUntil;
+
   const criticalCount = alerts.filter((a) => a.severity === 'critical').length;
   const warningCount = alerts.filter((a) => a.severity === 'warning').length;
 
-  const tempStatus =
-    primaryDevice.temperature != null &&
-    (primaryDevice.temperature < TEMP_SAFE_RANGE.min || primaryDevice.temperature > TEMP_SAFE_RANGE.max)
-      ? 'alert'
-      : 'ok';
-  const shockStatus =
-    primaryDevice.lastShock && primaryDevice.lastShock.g >= 1.5 ? 'warning' : 'ok';
+  const transportsWithLive = activeTransports.map((t, i) => {
+    const isLive = isConnected && t.deviceId === primaryDevice.deviceId;
+    const displayLoc = isLive ? (location || { lat: t.lat, lng: t.lng }) : { lat: t.lat, lng: t.lng };
+    const displayDest = isLive
+      ? destination
+      : { name: t.destination, lat: t.destLat ?? t.lat + 0.01, lng: t.destLng ?? t.lng + 0.01 };
+    if (isLive) {
+      const tempStatus =
+        primaryDevice.temperature != null &&
+        (primaryDevice.temperature < TEMP_SAFE_RANGE.min || primaryDevice.temperature > TEMP_SAFE_RANGE.max)
+          ? 'alert'
+          : 'ok';
+      const shockStatus =
+        primaryDevice.lastShock && primaryDevice.lastShock.g >= 1.5 ? 'warning' : 'ok';
+      return {
+        ...t,
+        temperature: primaryDevice.temperature ?? t.temperature,
+        humidity: primaryDevice.humidity ?? t.humidity,
+        lastShock: primaryDevice.lastShock ?? t.lastShock,
+        tempStatus,
+        shockStatus,
+        location: displayLoc,
+        destination: displayDest,
+        isLive,
+        lastReadingAt: isLive ? lastReadingAt : null,
+      };
+    }
+    return {
+      ...t,
+      location: displayLoc,
+      destination: displayDest,
+      isLive: false,
+      lastReadingAt: null,
+    };
+  });
+
+  const handleConfirmRedirect = (hospital) => {
+    setDestination({ name: hospital.name, lat: hospital.lat, lng: hospital.lng });
+    setRedirectDismissedUntil(Date.now() + 60000); // Don't show again for 1 minute
+  };
+
+  const handleRejectRedirect = () => {
+    setRedirectDismissedUntil(Date.now() + 60000); // Don't show again for 1 minute
+  };
 
   return (
     <div className="dashboard">
       <header className="dashboard-header">
         <div className="header-content">
-          <h1 className="dashboard-title">Organ Transport Monitoring</h1>
+          <h1 className="dashboard-title">Organ Ground Transport Monitoring</h1>
           <p className="dashboard-subtitle">
-            Temperature & shock monitoring for transplant logistics
+            On-ground transport logistics — temperature, shock, humidity & GPS tracking
           </p>
         </div>
         <div className="header-meta">
@@ -77,8 +127,8 @@ function App() {
       <main className="dashboard-main">
         <section className="stats-row">
           <div className="stat-card">
-            <span className="stat-value">{isConnected ? 1 : 0}</span>
-            <span className="stat-label">Active transport</span>
+            <span className="stat-value">{activeTransports.length}</span>
+            <span className="stat-label">Active transports</span>
           </div>
           <div className="stat-card stat-alerts">
             <span className="stat-value">{criticalCount}</span>
@@ -89,7 +139,7 @@ function App() {
             <span className="stat-label">Warnings</span>
           </div>
           <div className="stat-card">
-            <span className="stat-value">{isConnected ? 1 : 0}</span>
+            <span className="stat-value">{isConnected ? activeTransports.length : activeTransports.length}</span>
             <span className="stat-label">Devices online</span>
           </div>
         </section>
@@ -188,50 +238,77 @@ function App() {
           </section>
         </div>
 
+        <MapPanel location={location} path={path} isConnected={isConnected} />
+
         <section className="panel transports-panel">
-          <h2 className="panel-title">Active transport</h2>
+          <h2 className="panel-title">Active transports</h2>
           <p className="panel-desc">
             {isConnected
-              ? 'Live data from connected microcontroller'
-              : 'Connect a microcontroller via the bridge server to see live data'}
+              ? `${activeTransports.length} transports — DEV-001 has live data from microcontroller`
+              : `${activeTransports.length} transports with synthetic data. Connect a microcontroller for live updates.`}
           </p>
           <div className="table-wrap">
             <table className="transports-table">
               <thead>
                 <tr>
+                  <th>Transport</th>
+                  <th>Organ</th>
                   <th>Device</th>
+                  <th>Destination</th>
                   <th>Temperature</th>
                   <th>Humidity</th>
                   <th>Shock</th>
+                  <th>Location</th>
                   <th>Status</th>
                   <th>Last reading</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                <tr className={isConnected ? 'transport-live' : 'transport-disconnected'}>
-                  <td><code>{primaryDevice.deviceId || '—'}</code></td>
-                  <td>
-                    <span className="temp-cell">
-                      {primaryDevice.temperature != null ? `${primaryDevice.temperature}°C` : '—'}
-                    </span>
-                    {isConnected && <StatusBadge status={tempStatus} />}
-                  </td>
-                  <td>
-                    {primaryDevice.humidity != null ? `${primaryDevice.humidity.toFixed(1)}%` : '—'}
-                  </td>
-                  <td>
-                    {primaryDevice.lastShock ? `${primaryDevice.lastShock.g}g` : '—'}
-                    {isConnected && primaryDevice.lastShock && <StatusBadge status={shockStatus} />}
-                  </td>
-                  <td>
-                    {isConnected ? (
-                      <span className="status-live">Live</span>
-                    ) : (
-                      <span className="status-offline">Offline</span>
-                    )}
-                  </td>
-                  <td>{lastReadingAt ? formatTime(lastReadingAt) : '—'}</td>
-                </tr>
+                {transportsWithLive.map((t) => (
+                  <tr key={t.id} className={t.isLive ? 'transport-live' : ''}>
+                    <td><code>{t.id}</code></td>
+                    <td>{t.organType}</td>
+                    <td><code>{t.deviceId}</code></td>
+                    <td>{t.destination?.name ?? t.destination}</td>
+                    <td>
+                      <span className="temp-cell">
+                        {t.temperature != null ? `${t.temperature}°C` : '—'}
+                      </span>
+                      {t.isLive && <StatusBadge status={t.tempStatus} />}
+                    </td>
+                    <td>{t.humidity != null ? `${t.humidity.toFixed(1)}%` : '—'}</td>
+                    <td>
+                      {t.lastShock ? `${t.lastShock.g}g` : '—'}
+                      {t.isLive && t.lastShock && <StatusBadge status={t.shockStatus} />}
+                    </td>
+                    <td className="location-cell">
+                      {t.location
+                        ? `${t.location.lat.toFixed(4)}, ${t.location.lng.toFixed(4)}`
+                        : '—'}
+                    </td>
+                    <td>
+                      {t.isLive ? (
+                        <span className="status-live">Live</span>
+                      ) : (
+                        <span className="status-offline">Synthetic</span>
+                      )}
+                    </td>
+                    <td>{t.lastReadingAt ? formatTime(t.lastReadingAt) : '—'}</td>
+                    <td>
+                      <button
+                        className="btn-view-route"
+                        onClick={() => {
+                          setSelectedTransportId(t.id);
+                          setRouteModalOpen(true);
+                        }}
+                        title="View route and path"
+                      >
+                        View route
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -254,6 +331,34 @@ function App() {
           )}
         </section>
       </main>
+
+      <RouteModal
+        isOpen={routeModalOpen}
+        onClose={() => { setRouteModalOpen(false); setSelectedTransportId(null); }}
+        location={selectedTransportId && transportsWithLive.find((x) => x.id === selectedTransportId)?.isLive
+          ? location
+          : selectedTransportId
+            ? transportsWithLive.find((x) => x.id === selectedTransportId)?.location ?? null
+            : null}
+        path={selectedTransportId && transportsWithLive.find((x) => x.id === selectedTransportId)?.isLive
+          ? path
+          : []}
+        destination={selectedTransportId
+          ? (transportsWithLive.find((x) => x.id === selectedTransportId)?.destination ?? destination)
+          : destination}
+        transportLabel={selectedTransportId
+          ? transportsWithLive.find((x) => x.id === selectedTransportId)?.organType + ' → ' + (transportsWithLive.find((x) => x.id === selectedTransportId)?.destination?.name ?? '')
+          : null}
+      />
+
+      <RedirectTriage
+        alert={criticalAlert}
+        currentDestination={destination}
+        location={location || (transportsWithLive[0]?.location ?? { lat: 37.7749, lng: -122.4194 })}
+        onConfirm={handleConfirmRedirect}
+        onReject={handleRejectRedirect}
+        isOpen={showRedirectTriage}
+      />
     </div>
   );
 }
