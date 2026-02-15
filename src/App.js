@@ -60,7 +60,7 @@ function App() {
   }, [lastReadingAt]);
 
   const criticalAlert = alerts.find((a) => a.severity === 'critical');
-  const showRedirectTriage = criticalAlert && Date.now() > redirectDismissedUntil;
+  const showRedirectTriage = criticalAlert && Date.now() > redirectDismissedUntil && !redirectedTo;
 
   const criticalCount = alerts.filter((a) => a.severity === 'critical').length;
   const warningCount = alerts.filter((a) => a.severity === 'warning').length;
