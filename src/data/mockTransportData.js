@@ -1,6 +1,34 @@
 // Mock data for organ transport monitoring — replace with API/hardware later
 
-export const TEMP_SAFE_RANGE = { min: 2, max: 6 }; // °C for cold storage/transport
+/**
+ * Organ-specific temperature safe ranges (°C) during transport.
+ * Heart: avoid too-cold; ideal ~4–8°C.
+ * Kidney/Liver/Lung/Pancreas: SCS (static cold storage) typically 0–4°C.
+ */
+export const ORGAN_TEMP_RANGES = {
+  Heart: { min: 4, max: 8 },
+  Kidney: { min: 0, max: 4 },
+  Liver: { min: 0, max: 4 },
+  Lung: { min: 0, max: 4 },
+  Pancreas: { min: 0, max: 4 },
+};
+
+/** Default range when organ type unknown (conservative: SCS) */
+export const DEFAULT_TEMP_RANGE = { min: 0, max: 4 };
+
+/** @deprecated Use getTempRangeForOrgan instead */
+export const TEMP_SAFE_RANGE = { min: 2, max: 6 };
+
+export function getTempRangeForOrgan(organType) {
+  if (!organType) return DEFAULT_TEMP_RANGE;
+  return ORGAN_TEMP_RANGES[organType] ?? DEFAULT_TEMP_RANGE;
+}
+
+export function getTempStatusForOrgan(temp, organType) {
+  if (temp == null) return 'ok';
+  const range = getTempRangeForOrgan(organType);
+  return temp >= range.min && temp <= range.max ? 'ok' : 'alert';
+}
 
 // Synthetic locations (SF Bay Area) — used when no GPS from device
 const SYNTHETIC_BASE = { lat: 37.7749, lng: -122.4194 };
@@ -41,7 +69,7 @@ export const activeTransports = [
     status: 'in_transit',
     temperature: 5.1,
     humidity: 52.0,
-    tempStatus: 'ok',
+    tempStatus: 'alert',
     lastShock: { g: 2.1, at: '2025-02-14T09:15:00Z' },
     shockStatus: 'warning',
     startedAt: '2025-02-14T07:00:00Z',
@@ -77,7 +105,7 @@ export const activeTransports = [
     status: 'in_transit',
     temperature: 4.5,
     humidity: 44.0,
-    tempStatus: 'ok',
+    tempStatus: 'alert',
     lastShock: null,
     shockStatus: 'ok',
     startedAt: '2025-02-14T08:15:00Z',
@@ -131,7 +159,7 @@ export const activeTransports = [
     status: 'in_transit',
     temperature: 4.8,
     humidity: 49.5,
-    tempStatus: 'ok',
+    tempStatus: 'alert',
     lastShock: null,
     shockStatus: 'ok',
     startedAt: '2025-02-14T08:00:00Z',
@@ -149,7 +177,7 @@ export const activeTransports = [
     status: 'in_transit',
     temperature: 6.1,
     humidity: 46.3,
-    tempStatus: 'ok',
+    tempStatus: 'alert',
     lastShock: { g: 1.8, at: '2025-02-14T09:05:00Z' },
     shockStatus: 'warning',
     startedAt: '2025-02-14T07:30:00Z',
@@ -185,7 +213,7 @@ export const activeTransports = [
     status: 'in_transit',
     temperature: 5.5,
     humidity: 42.1,
-    tempStatus: 'ok',
+    tempStatus: 'alert',
     lastShock: null,
     shockStatus: 'ok',
     startedAt: '2025-02-14T08:45:00Z',
@@ -212,6 +240,6 @@ export const currentReadings = {
 };
 
 export const alerts = [
-  { id: 1, type: 'temperature', severity: 'critical', message: 'T-2849 (Kidney): Temperature 7.8°C — above safe range', at: '2025-02-14T09:32:00Z' },
+  { id: 1, type: 'temperature', severity: 'critical', message: 'T-2849 (Kidney): Temperature 7.8°C — outside safe range (0–4°C)', at: '2025-02-14T09:32:00Z' },
   { id: 2, type: 'shock', severity: 'warning', message: 'T-2848 (Liver): Shock event 2.1g detected', at: '2025-02-14T09:15:00Z' },
 ];

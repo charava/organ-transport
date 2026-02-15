@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { TEMP_SAFE_RANGE, getSyntheticLocation } from '../data/mockTransportData';
+import { getTempRangeForOrgan, getSyntheticLocation } from '../data/mockTransportData';
 
 const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:4000';
 const SHOCK_WARNING_THRESHOLD = 1.5; // g-force above this = warning
@@ -10,7 +10,7 @@ const MAX_ALERTS = 50; // maybe we want to change this?!! to 100
 const emptyDevice = { deviceId: null, temperature: null, humidity: null, lastShock: null };
 const MAX_PATH_POINTS = 500;
 
-export function useLiveReadings() {
+export function useLiveReadings(transports = []) {
   const [isConnected, setIsConnected] = useState(false);
   const [primaryDevice, setPrimaryDevice] = useState(emptyDevice);
   const [recentShocks, setRecentShocks] = useState([]);
@@ -74,19 +74,21 @@ export function useLiveReadings() {
       }
     }
 
-    if (typeof temp === 'number' && (temp < TEMP_SAFE_RANGE.min || temp > TEMP_SAFE_RANGE.max)) {
+    const organType = transports.find((t) => t.deviceId === (deviceId || 'DEV-001'))?.organType;
+    const range = getTempRangeForOrgan(organType);
+    if (typeof temp === 'number' && (temp < range.min || temp > range.max)) {
       setAlerts((prev) => [
         {
           id: Date.now(),
           type: 'temperature',
           severity: 'critical',
-          message: `${deviceId || 'Device'}: Temperature ${temp.toFixed(1)}°C — outside safe range (${TEMP_SAFE_RANGE.min}–${TEMP_SAFE_RANGE.max}°C)`,
+          message: `${deviceId || 'Device'}${organType ? ` (${organType})` : ''}: Temperature ${temp.toFixed(1)}°C — outside safe range (${range.min}–${range.max}°C)`,
           at: now,
         },
         ...prev.slice(0, MAX_ALERTS - 1),
       ]);
     }
-  }, []);
+  }, [transports]);
 
   useEffect(() => {
     if (!isConnected) {

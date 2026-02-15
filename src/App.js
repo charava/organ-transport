@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import './App.css';
-import { TEMP_SAFE_RANGE, activeTransports } from './data/mockTransportData';
+import { getTempRangeForOrgan, getTempStatusForOrgan, activeTransports } from './data/mockTransportData';
 import { DEFAULT_DESTINATION } from './data/transportConfig';
 import { useLiveReadings } from './hooks/useLiveReadings';
 import { MapPanel } from './components/MapPanel';
@@ -44,7 +44,7 @@ function formatRelativeTime(iso) {
 }
 
 function App() {
-  const { primaryDevice, recentShocks, alerts, isConnected, lastReadingAt, location, path } = useLiveReadings();
+  const { primaryDevice, recentShocks, alerts, isConnected, lastReadingAt, location, path } = useLiveReadings(activeTransports);
   const [, setTick] = useState(0);
   const [destination, setDestination] = useState(DEFAULT_DESTINATION);
   const [redirectedTo, setRedirectedTo] = useState(null);
@@ -71,12 +71,9 @@ function App() {
     const displayDest = isLive
       ? destination
       : { name: t.destination, lat: t.destLat ?? t.lat + 0.01, lng: t.destLng ?? t.lng + 0.01 };
+    const temp = isLive ? (primaryDevice.temperature ?? t.temperature) : t.temperature;
+    const tempStatus = getTempStatusForOrgan(temp, t.organType);
     if (isLive) {
-      const tempStatus =
-        primaryDevice.temperature != null &&
-        (primaryDevice.temperature < TEMP_SAFE_RANGE.min || primaryDevice.temperature > TEMP_SAFE_RANGE.max)
-          ? 'alert'
-          : 'ok';
       const shockStatus =
         primaryDevice.lastShock && primaryDevice.lastShock.g >= 1.5 ? 'warning' : 'ok';
       return {
@@ -94,12 +91,16 @@ function App() {
     }
     return {
       ...t,
+      tempStatus,
       location: displayLoc,
       destination: displayDest,
       isLive: false,
       lastReadingAt: null,
     };
   });
+
+  const primaryOrgan = transportsWithLive.find((t) => t.deviceId === primaryDevice.deviceId)?.organType;
+  const primaryTempRange = getTempRangeForOrgan(primaryOrgan);
 
   const handleCloseRouteModal = useCallback(() => {
     setRouteModalOpen(false);
@@ -173,7 +174,7 @@ function App() {
         <div className="panels-grid">
           <section className="panel temperature-panel">
             <h2 className="panel-title">Temperature monitoring</h2>
-            <p className="panel-desc">Safe range: {TEMP_SAFE_RANGE.min}°C – {TEMP_SAFE_RANGE.max}°C</p>
+            <p className="panel-desc">Safe range: {primaryTempRange.min}°C – {primaryTempRange.max}°C{primaryOrgan ? ` (${primaryOrgan})` : ''}</p>
             <div className="temp-display">
               <span className="temp-value">
                 {primaryDevice.temperature != null ? primaryDevice.temperature : '—'}
@@ -192,14 +193,14 @@ function App() {
               <div
                 className="temp-range"
                 style={{
-                  left: `${(TEMP_SAFE_RANGE.min / 30) * 100}%`,
-                  width: `${((TEMP_SAFE_RANGE.max - TEMP_SAFE_RANGE.min) / 30) * 100}%`,
+                  left: `${(primaryTempRange.min / 30) * 100}%`,
+                  width: `${((primaryTempRange.max - primaryTempRange.min) / 30) * 100}%`,
                 }}
               />
             </div>
             <div className="temp-scale">
               <span>0</span>
-              <span>{TEMP_SAFE_RANGE.min}–{TEMP_SAFE_RANGE.max}</span>
+              <span>{primaryTempRange.min}–{primaryTempRange.max}</span>
               <span>30°C</span>
             </div>
             <div className="device-id">Device: {primaryDevice.deviceId || '—'}</div>
